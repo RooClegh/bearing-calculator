@@ -12,18 +12,25 @@ def get_realtime_usd():
     except:
         return 1450.0
 
-# 2. 엑셀 데이터 로드 함수 (캐싱 처리하여 속도 향상)
+# 2. 데이터 로드 함수 (파일 형식 자동 감지)
 @st.cache_data
 def load_data():
+    file_name = "bearing_list.xlsx"
     try:
-        # 엑셀 파일 이름을 'bearing_list.xlsx'로 저장해서 업로드했다고 가정합니다.
-        df = pd.read_excel("bearing_list.xlsx")
-        # 데이터의 공백 제거 및 문자열 변환
-        df['base_model'] = df['base_model'].astype(str).str.strip()
-        df['model'] = df['model'].astype(str).str.strip()
-        return df
-    except:
-        return None
+        # 1차 시도: 엑셀 파일로 읽기
+        df = pd.read_excel(file_name)
+    except Exception:
+        try:
+            # 2차 시도: 엑셀 확장자지만 실제론 CSV일 경우 대비
+            df = pd.read_csv(file_name)
+        except Exception:
+            return None
+    
+    # 데이터 정제 (글자 앞뒤 공백 제거)
+    for col in ['base_model', 'model', 'maker']:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+    return df
 
 st.set_page_config(page_title="항공 운임 계산기", layout="wide")
 realtime_rate = get_realtime_usd()
@@ -34,36 +41,33 @@ st.markdown(f"**현재 시장 환율(참고):** 1$ = {realtime_rate:,.2f} 원")
 
 # --- 검색 섹션 ---
 st.header("🔍 베어링 규격 검색")
+init_l, init_w, init_h, init_weight = 100.0, 100.0, 100.0, 1.0
+
 if df is not None:
     search_query = st.text_input("검색할 형번을 입력하세요 (예: 22214)", "").strip()
     
     if search_query:
-        # 부분 일치 검색 (형번이나 전체 모델명에 포함된 경우)
-        filtered_df = df[df['base_model'].str.contains(search_query, case=False) | 
-                         df['model'].str.contains(search_query, case=False)]
+        # 부분 일치 검색
+        mask = (df['base_model'].str.contains(search_query, case=False, na=False)) | \
+               (df['model'].str.contains(search_query, case=False, na=False))
+        filtered_df = df[mask]
         
         if not filtered_df.empty:
-            # 검색된 결과 중 하나를 선택 (모델명 + 메이커)
             selection_list = filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1).tolist()
             selected_item = st.selectbox("정확한 모델을 선택하세요", selection_list)
             
             # 선택된 데이터 추출
-            selected_row = filtered_df[filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1) == selected_item].iloc[0]
+            row = filtered_df[filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1) == selected_item].iloc[0]
             
-            # 자동 입력값 설정
-            init_l = float(selected_row['length_mm'])
-            init_w = float(selected_row['width_mm'])
-            init_h = float(selected_row['height_mm'])
-            init_weight = float(selected_row['weight_kg'])
+            init_l = float(row['length_mm'])
+            init_w = float(row['width_mm'])
+            init_h = float(row['height_mm'])
+            init_weight = float(row['weight_kg'])
             st.success(f"✅ {selected_item} 규격이 로드되었습니다.")
         else:
-            st.warning("❌ 검색 결과가 없습니다. 직접 입력해 주세요.")
-            init_l, init_w, init_h, init_weight = 100.0, 100.0, 100.0, 1.0
-    else:
-        init_l, init_w, init_h, init_weight = 100.0, 100.0, 100.0, 1.0
+            st.warning("❌ 검색 결과가 없습니다.")
 else:
-    st.error("엑셀 파일을 찾을 수 없습니다. 'bearing_list.xlsx' 파일이 업로드되었는지 확인하세요.")
-    init_l, init_w, init_h, init_weight = 100.0, 100.0, 100.0, 1.0
+    st.error("⚠️ 'bearing_list.xlsx' 파일을 읽을 수 없습니다. 파일명과 형식을 확인해 주세요.")
 
 st.divider()
 
