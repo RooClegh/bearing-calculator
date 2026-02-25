@@ -2,15 +2,17 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. 환율 가져오기 함수
-def get_realtime_usd():
+# 1. 실시간 환율 가져오기 함수 (통화 코드 추가)
+def get_exchange_rate(target_currency="USD"):
     try:
-        url = "https://api.exchangerate-api.com/v4/latest/USD"
+        url = f"https://api.exchangerate-api.com/v4/latest/{target_currency}"
         response = requests.get(url)
         data = response.json()
         return data['rates']['KRW']
     except:
-        return 1450.0
+        # 에러 발생 시 기본값 (현재 기준 대략적 수치)
+        defaults = {"USD": 1450.0, "JPY": 9.5, "EUR": 1550.0, "CNY": 200.0}
+        return defaults.get(target_currency, 1450.0)
 
 # 2. 데이터 로드 함수
 @st.cache_data
@@ -29,13 +31,11 @@ def load_data():
     return df
 
 st.set_page_config(page_title="동명베아링 운임 계산기", layout="wide")
-realtime_rate = get_realtime_usd()
 df = load_data()
 
 # --- 타이틀 및 안내 섹션 ---
-st.title("🚢 베어링 항공 운임 스마트 계산기 (Ver 3.1)")
-
-st.info("💡 베어링 개별 수량과 실제 '포장 덩어리(박스/팔레트)'의 개수를 각각 입력해 주세요.")
+st.title("🚢 베어링 항공 운임 스마트 계산기 (Ver 3.2)")
+st.info("💡 국가를 선택하면 해당 국가의 통화 환율과 표준 운임 단가가 자동으로 로드됩니다.")
 
 # 사이드바: 회사 정보
 st.sidebar.markdown("### 📍 도착지 정보")
@@ -82,7 +82,6 @@ with col_input2:
         "팔레트 (1200*800) - 인도 수출용"
     ])
     
-    # 포장 종류에 따라 입력창 이름 변경
     unit_label = "포장 총 개수"
     if "팔레트" in p_type:
         unit_label = "팔레트 총 개수 (PLT)"
@@ -91,48 +90,51 @@ with col_input2:
     
     p_qty = st.number_input(f"{unit_label}", min_value=1, value=1)
 
-    # 포장별 규격 설정
     p_l, p_w, p_h, p_added_w = init_l, init_w, init_h, 0.0
-    
     if "종이 박스" in p_type:
         p_l, p_w, p_h, p_added_w = 245, 275, 150, 0.5
     elif "팔레트" in p_type:
         dims = p_type.split("(")[1].split(")")[0].split("*")
         p_l, p_w = float(dims[0]), float(dims[1])
         p_h = st.number_input("적재 높이 (mm)", min_value=100, value=500, step=50)
-        p_added_w = 20.0 # 팔레트 1개당 무게
+        p_added_w = 20.0
 
 st.divider()
 
-# --- 3. 국가 선택 및 단가 섹션 ---
+# --- 3. 국가 선택 및 환율/단가 자동화 ---
 st.header("🌐 3. 수입 국가 및 운임 설정")
 col_rate1, col_rate2 = st.columns(2)
 
-country_rates = {
-    "일본 🇯🇵": 2.5,
-    "미국 🇺🇸": 5.5,
-    "독일 🇩🇪": 4.5,
-    "중국 🇨🇳": 1.5,
-    "직접 입력": 0.0
+# 국가별 정보 설정: {국가명: (표준단가$, 통화코드)}
+country_info = {
+    "미국 🇺🇸": (5.5, "USD"),
+    "일본 🇯🇵": (2.5, "JPY"),
+    "독일 🇩🇪": (4.5, "EUR"),
+    "중국 🇨🇳": (1.5, "CNY"),
+    "직접 입력": (0.0, "USD")
 }
 
 with col_rate1:
-    selected_country = st.selectbox("출발 국가를 선택하세요", list(country_rates.keys()))
-    default_unit_price = country_rates[selected_country]
+    selected_country = st.selectbox("출발 국가를 선택하세요", list(country_info.keys()))
+    default_unit_price, currency_code = country_info[selected_country]
+    
+    # 국가 선택에 따른 실시간 환율 가져오기
+    current_rate = get_exchange_rate(currency_code)
 
 with col_rate2:
     u_price = st.number_input(f"kg당 운임 ($) - {selected_country}", min_value=0.0, value=default_unit_price, step=0.1)
-    e_rate = st.number_input("적용 환율 (원/$)", min_value=1.0, value=realtime_rate)
+    # 일본의 경우 엔화 환율은 보통 100엔 기준이므로 화면 표시를 조정
+    rate_label = f"적용 환율 (원/{currency_code})"
+    e_rate = st.number_input(rate_label, min_value=0.1, value=current_rate, format="%.2f")
 
-# --- 계산 로직 (핵심) ---
-# 1. 실무게: (베어링 무게 * 수량) + (포장재 무게 * 포장개수)
+# --- 계산 로직 ---
 total_actual_weight = (b_weight * bearing_qty) + (p_added_w * p_qty)
-
-# 2. 부피무게: (포장 가로 * 세로 * 높이 * 포장개수) / 6000
 total_volume_weight = (p_l/10 * p_w/10 * p_h/10 * p_qty) / 6000
-
-# 3. 청구무게(C.W)
 chargeable_weight = max(total_actual_weight, total_volume_weight)
+
+# 최종 금액 계산
+# 만약 일본(JPY)이라면 단가($)를 환산하는 방식에 따라 로직이 달라질 수 있지만, 
+# 여기서는 사용자가 입력한 $ 단가에 해당 국가 환율을 곱하는 것으로 설정했습니다.
 final_usd = chargeable_weight * u_price
 final_krw = final_usd * e_rate
 
@@ -142,4 +144,4 @@ st.header("💰 4. 최종 예상 운임 결과")
 res1, res2, res3 = st.columns(3)
 res1.metric("청구 무게 (C.W)", f"{chargeable_weight:.2f} kg")
 res2.metric("예상 운임 (USD)", f"$ {final_usd:,.2f}")
-res3.metric("예상 운임 (KRW)", f"{int(final_krw):,} 원")
+res3.metric(f"예상 운임 (KRW)", f"{int(final_krw):,} 원")
