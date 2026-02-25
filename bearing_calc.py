@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# 1. 실시간 환율 가져오기 함수 (통화 코드 추가)
+# 1. 실시간 환율 가져오기 함수
 def get_exchange_rate(target_currency="USD"):
     try:
         url = f"https://api.exchangerate-api.com/v4/latest/{target_currency}"
@@ -10,7 +10,6 @@ def get_exchange_rate(target_currency="USD"):
         data = response.json()
         return data['rates']['KRW']
     except:
-        # 에러 발생 시 기본값 (현재 기준 대략적 수치)
         defaults = {"USD": 1450.0, "JPY": 9.5, "EUR": 1550.0, "CNY": 200.0}
         return defaults.get(target_currency, 1450.0)
 
@@ -31,11 +30,14 @@ def load_data():
     return df
 
 st.set_page_config(page_title="동명베아링 운임 계산기", layout="wide")
+
+# 기본 USD 환율 미리 로드
+usd_rate = get_exchange_rate("USD")
 df = load_data()
 
 # --- 타이틀 및 안내 섹션 ---
-st.title("🚢 베어링 항공 운임 스마트 계산기 (Ver 3.2)")
-st.info("💡 국가를 선택하면 해당 국가의 통화 환율과 표준 운임 단가가 자동으로 로드됩니다.")
+st.title("🚢 베어링 항공 운임 스마트 계산기 (Ver 3.3)")
+st.info("💡 모든 운임은 **USD($)** 기준으로 계산되며, 국가별 환율은 참고 정보로 제공됩니다.")
 
 # 사이드바: 회사 정보
 st.sidebar.markdown("### 📍 도착지 정보")
@@ -101,11 +103,10 @@ with col_input2:
 
 st.divider()
 
-# --- 3. 국가 선택 및 환율/단가 자동화 ---
+# --- 3. 국가 선택 및 환율/단가 설정 ---
 st.header("🌐 3. 수입 국가 및 운임 설정")
 col_rate1, col_rate2 = st.columns(2)
 
-# 국가별 정보 설정: {국가명: (표준단가$, 통화코드)}
 country_info = {
     "미국 🇺🇸": (5.5, "USD"),
     "일본 🇯🇵": (2.5, "JPY"),
@@ -118,23 +119,20 @@ with col_rate1:
     selected_country = st.selectbox("출발 국가를 선택하세요", list(country_info.keys()))
     default_unit_price, currency_code = country_info[selected_country]
     
-    # 국가 선택에 따른 실시간 환율 가져오기
-    current_rate = get_exchange_rate(currency_code)
+    # 해당 국가 환율 가져오기 (참고용)
+    ref_rate = get_exchange_rate(currency_code)
+    st.caption(f"📢 참고: 현재 {selected_country} 실시간 환율은 1 {currency_code} = {ref_rate:,.2f}원 입니다.")
 
 with col_rate2:
+    # 계산은 무조건 USD 기반으로 통일
     u_price = st.number_input(f"kg당 운임 ($) - {selected_country}", min_value=0.0, value=default_unit_price, step=0.1)
-    # 일본의 경우 엔화 환율은 보통 100엔 기준이므로 화면 표시를 조정
-    rate_label = f"적용 환율 (원/{currency_code})"
-    e_rate = st.number_input(rate_label, min_value=0.1, value=current_rate, format="%.2f")
+    e_rate = st.number_input("계산 적용 환율 (원/USD)", min_value=1.0, value=usd_rate, format="%.2f")
 
 # --- 계산 로직 ---
 total_actual_weight = (b_weight * bearing_qty) + (p_added_w * p_qty)
 total_volume_weight = (p_l/10 * p_w/10 * p_h/10 * p_qty) / 6000
 chargeable_weight = max(total_actual_weight, total_volume_weight)
 
-# 최종 금액 계산
-# 만약 일본(JPY)이라면 단가($)를 환산하는 방식에 따라 로직이 달라질 수 있지만, 
-# 여기서는 사용자가 입력한 $ 단가에 해당 국가 환율을 곱하는 것으로 설정했습니다.
 final_usd = chargeable_weight * u_price
 final_krw = final_usd * e_rate
 
@@ -144,4 +142,4 @@ st.header("💰 4. 최종 예상 운임 결과")
 res1, res2, res3 = st.columns(3)
 res1.metric("청구 무게 (C.W)", f"{chargeable_weight:.2f} kg")
 res2.metric("예상 운임 (USD)", f"$ {final_usd:,.2f}")
-res3.metric(f"예상 운임 (KRW)", f"{int(final_krw):,} 원")
+res3.metric("예상 운임 (KRW)", f"{int(final_krw):,} 원")
