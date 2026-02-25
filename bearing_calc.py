@@ -12,21 +12,18 @@ def get_realtime_usd():
     except:
         return 1450.0
 
-# 2. 데이터 로드 함수 (파일 형식 자동 감지)
+# 2. 데이터 로드 함수
 @st.cache_data
 def load_data():
     file_name = "bearing_list.xlsx"
     try:
-        # 1차 시도: 엑셀 파일로 읽기
         df = pd.read_excel(file_name)
     except Exception:
         try:
-            # 2차 시도: 엑셀 확장자지만 실제론 CSV일 경우 대비
             df = pd.read_csv(file_name)
         except Exception:
             return None
     
-    # 데이터 정제 (글자 앞뒤 공백 제거)
     for col in ['base_model', 'model', 'maker']:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
@@ -36,7 +33,25 @@ st.set_page_config(page_title="항공 운임 계산기", layout="wide")
 realtime_rate = get_realtime_usd()
 df = load_data()
 
+# --- 타이틀 및 안내 섹션 ---
 st.title("🚢 베어링 항공 운임 스마트 계산기")
+
+# [업데이트] 계산 공식 안내 (Expander)
+with st.expander("📝 항공 운임 계산 공식 확인하기"):
+    st.write("""
+    1. **실무게(Actual Weight):** 화물의 실제 중량 (kg)
+    2. **부피무게(Volume Weight):** (가로cm × 세로cm × 높이cm) × 수량 ÷ 6,000
+    3. **청구무게(Chargeable Weight):** 실무게와 부피무게 중 큰 값 적용
+    4. **최종운임:** 청구무게(C.W) × kg당 단가($) × 적용 환율(₩)
+    """)
+
+# [업데이트] 주의 사항 안내 (Info)
+st.info("💡 본 계산기는 입력된 규격을 바탕으로 산출된 **예상 운임**이며, 실제 항공사 청구 시 패킹 상태나 현지 사정에 따라 실제 운임과 차이가 발생할 수 있습니다.")
+
+# 도착지 정보 (미리 고정)
+st.sidebar.markdown("### 📍 도착지 정보")
+st.sidebar.info("**동명베아링**\n\n부산광역시 사상구 새벽로215번길 123")
+
 st.markdown(f"**현재 시장 환율(참고):** 1$ = {realtime_rate:,.2f} 원")
 
 # --- 검색 섹션 ---
@@ -47,7 +62,6 @@ if df is not None:
     search_query = st.text_input("검색할 형번을 입력하세요 (예: 22214)", "").strip()
     
     if search_query:
-        # 부분 일치 검색
         mask = (df['base_model'].str.contains(search_query, case=False, na=False)) | \
                (df['model'].str.contains(search_query, case=False, na=False))
         filtered_df = df[mask]
@@ -56,7 +70,6 @@ if df is not None:
             selection_list = filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1).tolist()
             selected_item = st.selectbox("정확한 모델을 선택하세요", selection_list)
             
-            # 선택된 데이터 추출
             row = filtered_df[filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1) == selected_item].iloc[0]
             
             init_l = float(row['length_mm'])
@@ -67,7 +80,7 @@ if df is not None:
         else:
             st.warning("❌ 검색 결과가 없습니다.")
 else:
-    st.error("⚠️ 'bearing_list.xlsx' 파일을 읽을 수 없습니다. 파일명과 형식을 확인해 주세요.")
+    st.error("⚠️ 'bearing_list.xlsx' 파일을 읽을 수 없습니다.")
 
 st.divider()
 
