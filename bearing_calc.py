@@ -23,16 +23,16 @@ df = load_data()
 # 타이틀과 버전 정보를 안전한 마크다운 형식으로 변경
 st.markdown(f"## ✈️ 베어링 항공 운임 스마트 계산기 <span style='font-size: 0.8em; color: gray; font-weight: normal;'>Ver 3.8</span>", unsafe_allow_html=True)
 
-# --- [고정 규칙 3] 기본적인 항공료 계산법 기재 ---
-# 폰트 오류를 방지하기 위해 st.info 내부나 일반 마크다운 사용
+# --- [고정 규칙 3] 기본적인 항공료 계산법 기재 (스타일 수정본) ---
 st.markdown("### 📋 기본적인 항공료 계산법")
-with st.container():
-    st.markdown("""
-    > **1. 실무게(Actual Weight):** (베어링 개당 무게 × 수량) + 포장재 무게  
-    > **2. 부피무게(Volume Weight):** (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000  
-    > **3. 청구무게(Chargeable Weight):** 실무게와 부피무게 중 큰 값 적용  
-    > **4. 최종운임:** 청구무게(C.W) × [A/F단가($) + 할증료합계($)] × 적용 환율(₩)
-    """)
+
+# 스타일을 강제로 통일하기 위해 보이지 않는 설정을 살짝 넣고 텍스트 출력
+st.info("""
+1. 실무게(Actual Weight): (베어링 개당 무게 × 수량) + 포장재 무게
+2. 부피무게(Volume Weight): (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000
+3. 청구무게(Chargeable Weight): 실무게와 부피무게 중 큰 값 적용
+4. 최종운임: 청구무게(C.W) × [A/F단가($) + 할증료합계($)] × 적용 환율(₩)
+""")
 
 st.divider()
 
