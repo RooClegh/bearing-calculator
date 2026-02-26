@@ -31,17 +31,30 @@ def load_data():
 
 st.set_page_config(page_title="동명베아링 운임 계산기", layout="wide")
 
-# 기본 USD 환율 미리 로드
+# 기본 USD 환율 로드
 usd_rate = get_exchange_rate("USD")
 df = load_data()
 
-# --- 타이틀 및 안내 섹션 ---
-st.title("🚢 베어링 항공 운임 스마트 계산기 (Ver 3.3)")
+# --- [고정 규칙 1 & 2] 타이틀 및 버전 표기 ---
+# st.title 대신 마크다운을 사용하여 버전 정보를 우측에 작게 배치합니다.
+st.markdown("## ✈️ 베어링 항공 운임 스마트 계산기 <small style='font-size: 15px; color: gray;'>Ver 3.4</small>", unsafe_allow_html=True)
+
 st.info("💡 모든 운임은 **USD($)** 기준으로 계산되며, 국가별 환율은 참고 정보로 제공됩니다.")
 
 # 사이드바: 회사 정보
 st.sidebar.markdown("### 📍 도착지 정보")
 st.sidebar.info("**동명베아링**\n\n부산광역시 사상구 새벽로215번길 123")
+
+# --- [고정 규칙 3] 기본적인 항공료 계산법 기재 ---
+st.markdown("### 📋 기본적인 항공료 계산법")
+st.caption("""
+1. **실무게(Actual Weight):** (개당 무게 × 수량) + 포장재 무게  
+2. **부피무게(Volume Weight):** (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000  
+3. **청구무게(Chargeable Weight):** 실무게와 부피무게 중 큰 값 적용  
+4. **최종운임:** 청구무게(C.W) × kg당 단가($) × 적용 환율(₩)
+""")
+
+st.divider()
 
 # --- 1. 검색 섹션 ---
 st.header("🔍 1. 베어링 규격 검색")
@@ -119,12 +132,10 @@ with col_rate1:
     selected_country = st.selectbox("출발 국가를 선택하세요", list(country_info.keys()))
     default_unit_price, currency_code = country_info[selected_country]
     
-    # 해당 국가 환율 가져오기 (참고용)
     ref_rate = get_exchange_rate(currency_code)
     st.caption(f"📢 참고: 현재 {selected_country} 실시간 환율은 1 {currency_code} = {ref_rate:,.2f}원 입니다.")
 
 with col_rate2:
-    # 계산은 무조건 USD 기반으로 통일
     u_price = st.number_input(f"kg당 운임 ($) - {selected_country}", min_value=0.0, value=default_unit_price, step=0.1)
     e_rate = st.number_input("계산 적용 환율 (원/USD)", min_value=1.0, value=usd_rate, format="%.2f")
 
