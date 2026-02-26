@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# 1. 데이터 로드 함수 (캐싱 처리)
+# 1. 데이터 로드 함수
 @st.cache_data
 def load_data():
     file_name = "bearing_list.xlsx" 
@@ -17,38 +17,22 @@ def load_data():
 # 설정 및 데이터 로드
 st.set_page_config(page_title="동명베아링 운임 계산기", layout="wide")
 
-# CSS를 활용하여 시스템 폰트 강제 적용 및 스타일 수정
-st.markdown("""
-    <style>
-        html, body, [class*="css"] {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-        }
-        .calc-box {
-            background-color: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            border: 1px solid #dee2e6;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 df = load_data()
 
 # --- [고정 규칙 1 & 2] 타이틀 및 버전 표기 ---
-st.markdown("## ✈️ 베어링 항공 운임 스마트 계산기 <small style='font-size: 15px; color: gray;'>Ver 3.7</small>", unsafe_allow_html=True)
+# 타이틀과 버전 정보를 안전한 마크다운 형식으로 변경
+st.markdown(f"## ✈️ 베어링 항공 운임 스마트 계산기 <span style='font-size: 0.8em; color: gray; font-weight: normal;'>Ver 3.8</span>", unsafe_allow_html=True)
 
 # --- [고정 규칙 3] 기본적인 항공료 계산법 기재 ---
+# 폰트 오류를 방지하기 위해 st.info 내부나 일반 마크다운 사용
 st.markdown("### 📋 기본적인 항공료 계산법")
-st.markdown("""
-<div class="calc-box">
-    <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0; font-size: 0.9rem; line-height: 1.6;">
-        <li>✅ <b>실무게(Actual Weight):</b> (베어링 개당 무게 × 수량) + 포장재 무게</li>
-        <li>✅ <b>부피무게(Volume Weight):</b> (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000</li>
-        <li>✅ <b>청구무게(Chargeable Weight):</b> 실무게와 부피무게 중 큰 값 적용</li>
-        <li>✅ <b>최종운임:</b> 청구무게(C.W) × [A/F단가($) + 할증료합계($)] × 적용 환율(₩)</li>
-    </ul>
-</div>
-""", unsafe_allow_html=True)
+with st.container():
+    st.markdown("""
+    > **1. 실무게(Actual Weight):** (베어링 개당 무게 × 수량) + 포장재 무게  
+    > **2. 부피무게(Volume Weight):** (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000  
+    > **3. 청구무게(Chargeable Weight):** 실무게와 부피무게 중 큰 값 적용  
+    > **4. 최종운임:** 청구무게(C.W) × [A/F단가($) + 할증료합계($)] × 적용 환율(₩)
+    """)
 
 st.divider()
 
@@ -129,6 +113,3 @@ res1, res2, res3 = st.columns(3)
 res1.metric("청구 중량 (C.W)", f"{chargeable_weight:.2f} kg")
 res2.metric("예상 금액 (USD)", f"$ {total_usd:,.2f}")
 res3.metric("예상 금액 (KRW)", f"{int(total_krw):,} 원")
-
-if volume_weight > gross_weight:
-    st.warning(f"⚠️ 부피무게가 실무게보다 {volume_weight - gross_weight:.2f}kg 더 많이 나옵니다.")
