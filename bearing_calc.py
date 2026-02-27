@@ -1,115 +1,110 @@
 import streamlit as st
 import pandas as pd
+import re
 
-# 1. 데이터 로드 함수
-@st.cache_data
-def load_data():
-    file_name = "bearing_list.xlsx" 
-    try:
-        df = pd.read_excel(file_name)
-        for col in ['base_model', 'model', 'maker']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.strip()
-        return df
-    except:
-        return None
+# --- [고정 규칙 1 & 2] 타이틀 설정 (비행기 아이콘 + 작은 버전 표시) ---
+st.set_page_config(page_title="베어링 항공운임 스마트 계산기", page_icon="✈️")
 
-# 설정 및 데이터 로드
-st.set_page_config(page_title="동명베아링 운임 계산기", layout="wide")
+st.markdown("""
+    <div style="display: flex; align-items: baseline;">
+        <h1 style="margin-right: 15px;">✈️ 베어링 항공운임 스마트 계산기</h1>
+        <span style="font-size: 0.9em; color: gray;">Ver 4.1</span>
+    </div>
+""", unsafe_allow_html=True)
 
-df = load_data()
-
-# --- [고정 규칙 1 & 2] 타이틀 및 버전 표기 ---
-# 타이틀과 버전 정보를 안전한 마크다운 형식으로 변경
-st.markdown(f"## ✈️ 베어링 항공 운임 스마트 계산기 <span style='font-size: 0.8em; color: gray; font-weight: normal;'>Ver 3.8</span>", unsafe_allow_html=True)
-
-# --- [고정 규칙 3] 기본적인 항공료 계산법 기재 (스타일 수정본) ---
-st.markdown("### 📋 기본적인 항공료 계산법")
-
-# 스타일을 강제로 통일하기 위해 보이지 않는 설정을 살짝 넣고 텍스트 출력
-st.info("""
-1. 실무게(Actual Weight): (베어링 개당 무게 × 수량) + 포장재 무게
-2. 부피무게(Volume Weight): (가로cm × 세로cm × 높이cm × 포장개수) ÷ 6,000
-3. 청구무게(Chargeable Weight): 실무게와 부피무게 중 큰 값 적용
-4. 최종운임: 청구무게(C.W) × [A/F단가(\$) + 할증료합계(\$)] × 적용 환율(￦)
+# --- [고정 규칙 3] 항공 운임 기본 계산 방법 안내 ---
+# 검색창 바로 위에 고정적으로 표시되도록 배치했습니다.
+st.info("💡 **항공 운임 계산 가이드**")
+st.markdown("""
+* **실제 중량(A.W):** 화물의 실제 무게 (kg)
+* **부피 중량(V.W):** 가로(cm) × 세로(cm) × 높이(cm) ÷ 6,000
+* **운임 적용 중량:** 실제 중량과 부피 중량 중 **더 큰 값**을 기준으로 요금이 책정됩니다.
 """)
 
 st.divider()
 
-# --- 1. 베어링 규격 검색 및 수량 입력 ---
-st.header("🔍 1. 베어링 규격 검색 및 수량 입력")
-init_l, init_w, init_h, init_weight = 100.0, 100.0, 100.0, 1.0
-selected_model_name = "미선택"
-
-if df is not None:
-    search_query = st.text_input("검색할 베어링 형번을 입력하세요 (예: 22214)", "").strip()
-    if search_query:
-        mask = (df['base_model'].str.contains(search_query, case=False, na=False)) | \
-               (df['model'].str.contains(search_query, case=False, na=False))
-        filtered_df = df[mask]
-        if not filtered_df.empty:
-            selection_list = filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1).tolist()
-            selected_item = st.selectbox("정확한 모델을 선택하세요", selection_list)
-            row = filtered_df[filtered_df.apply(lambda x: f"{x['model']} ({x['maker']})", axis=1) == selected_item].iloc[0]
-            
-            init_l, init_w, init_h = float(row['length_mm']), float(row['width_mm']), float(row['height_mm'])
-            init_weight = float(row['weight_kg'])
-            selected_model_name = selected_item
-            st.success(f"✅ {selected_item} 데이터 로드 완료")
-else:
-    st.error("⚠️ bearing_list.xlsx 파일을 불러올 수 없습니다.")
-
-order_qty = st.number_input("수입 예정 총 수량 (EA)", min_value=1, value=100)
-
-st.divider()
-
-# --- 2. 예상 포장 설계 ---
-st.header("📦 2. 예상 포장 설계")
-p_col1, p_col2 = st.columns(2)
-
-with p_col1:
-    p_type = st.selectbox("사용할 포장 단위", ["표준 종이 박스", "표준 팔레트", "직접 입력"])
-    p_qty = st.number_input("예상 포장 덩어리 개수 (CTN/PLT)", min_value=1, value=1)
-
-with p_col2:
-    if p_type == "표준 종이 박스":
-        def_l, def_w, def_h, p_added_w = 245, 275, 150, 0.5
-    elif p_type == "표준 팔레트":
-        def_l, def_w, def_h, p_added_w = 1100, 1100, 700, 20.0
-    else:
-        def_l, def_w, def_h, p_added_w = init_l, init_w, init_h, 0.0
+# --- 지능형 매칭 함수 (90000번대 ASSY 완전 격리 로직) ---
+def smart_match_logic(search_query, row_model):
+    s_q = str(search_query).strip().upper()
+    r_m = str(row_model).strip().upper()
     
-    final_l = st.number_input("최종 포장 가로 (mm)", value=int(def_l))
-    final_w = st.number_input("최종 포장 세로 (mm)", value=int(def_w))
-    final_h = st.number_input("최종 포장 높이 (mm)", value=int(def_h))
+    def extract_num(text):
+        main = text.split('-')[0]
+        return "".join(re.findall(r'\d+', main))
+    
+    s_num = extract_num(s_q)
+    r_num = extract_num(r_m)
 
-st.divider()
+    # ASSY 특수 처리: 검색어나 데이터에 '-9'가 포함된 경우 (어제 성공한 그 로직!)
+    if '-9' in s_q or '-9' in r_m:
+        return s_q == r_m or (s_q in r_m and len(s_q) > 10)
+    
+    # 일반 모델: 숫자 기반 매칭
+    return s_num == r_num if s_num else False
 
-# --- 3. 포워더 요율 적용 ---
-st.header("🌐 3. 포워더 계약 요율 적용")
-f_col1, f_col2 = st.columns(2)
+# --- 데이터 로드 ---
+@st.cache_data
+def load_data():
+    try:
+        # 실제 사용하시는 엑셀 파일명으로 확인해주세요!
+        return pd.read_excel("bearing_list.xlsx")
+    except Exception as e:
+        st.error(f"엑셀 파일을 찾을 수 없습니다: {e}")
+        return pd.DataFrame()
 
-with f_col1:
-    af_price = st.number_input("포워더 A/F 단가 ($/kg)", value=1.75)
-    surcharge = st.number_input("할증료 합계 (FSC+SSC) ($/kg)", value=1.35)
+df = load_data()
 
-with f_col2:
-    exch_rate = st.number_input("적용 환율 (원/$)", value=1463.2)
-    aes_fee = st.checkbox("미국 AES Filing 비용 ($25) 포함", value=True)
+# --- 메인 UI: 베어링 규격 검색 ---
+if not df.empty:
+    st.subheader("🔍 베어링 규격 검색")
+    search_query = st.text_input("형번을 입력하세요 (예: 32034, 26822, HM266449-90158)", "").strip().upper()
 
-# --- 계산 로직 ---
-total_bearing_net_weight = init_weight * order_qty
-total_packing_tare_weight = p_added_w * p_qty
-gross_weight = total_bearing_net_weight + total_packing_tare_weight
-volume_weight = (final_l/10 * final_w/10 * final_h/10 * p_qty) / 6000
-chargeable_weight = max(gross_weight, volume_weight)
-total_usd = (chargeable_weight * (af_price + surcharge)) + (25.0 if aes_fee else 0)
-total_krw = total_usd * exch_rate
+    if search_query:
+        mask = df['model'].apply(lambda x: smart_match_logic(search_query, x))
+        filtered_df = df[mask]
 
-# --- 4. 최종 결과 ---
-st.divider()
-st.header("💰 4. 포워더 예상 청구 금액")
-res1, res2, res3 = st.columns(3)
-res1.metric("청구 중량 (C.W)", f"{chargeable_weight:.2f} kg")
-res2.metric("예상 금액 (USD)", f"$ {total_usd:,.2f}")
-res3.metric("예상 금액 (KRW)", f"{int(total_krw):,} 원")
+        if not filtered_df.empty:
+            selected_model = st.selectbox("리스트에서 정확한 모델을 선택하세요:", filtered_df['model'].tolist())
+            
+            # 선택된 데이터 상세 표시
+            spec = filtered_df[filtered_df['model'] == selected_model].iloc[0]
+            
+            st.write(f"### 📋 {selected_model} 상세 정보")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1: st.metric("제조사", spec['maker'])
+            with c2: st.metric("개당 중량", f"{spec['weight_kg']} kg")
+            with c3: st.metric("가로x세로(mm)", f"{int(spec['length_mm'])}x{int(spec['width_mm'])}")
+            with c4: st.metric("높이(mm)", f"{int(spec['height_mm'])}")
+
+            # --- 항공 운임 계산기 섹션 ---
+            st.divider()
+            st.subheader("💰 항공 운임 시뮬레이션")
+            
+            col_in1, col_in2 = st.columns(2)
+            with col_in1:
+                qty = st.number_input("주문 수량(pcs)", min_value=1, value=1)
+            with col_in2:
+                rate = st.number_input("항공 요율 (원/kg)", min_value=0, value=5500, step=100)
+
+            # 계산 로직
+            total_actual_weight = spec['weight_kg'] * qty
+            # 부피 중량 (mm단위를 cm로 변환: /10, 그 후 /6)
+            vol_weight = (spec['length_mm']/10 * spec['width_mm']/10 * spec['height_mm']/10 / 6) * qty
+            chargeable_weight = max(total_actual_weight, vol_weight)
+            total_cost = chargeable_weight * rate
+
+            st.write("#### 📊 계산 결과")
+            res1, res2, res3 = st.columns(3)
+            with res1:
+                st.write(f"실제 총 중량: **{total_actual_weight:.2f} kg**")
+            with res2:
+                st.write(f"부피 총 중량: **{vol_weight:.2f} kg**")
+            with res3:
+                st.success(f"적용 중량: **{chargeable_weight:.2f} kg**")
+
+            st.warning(f"### 💵 예상 총 항공 운임: **{int(total_cost):,} 원**")
+
+        else:
+            st.error("일치하는 모델을 찾을 수 없습니다. 형번을 다시 확인해주세요.")
+else:
+    st.warning("엑셀 데이터를 먼저 준비해주세요.")
