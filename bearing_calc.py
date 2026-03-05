@@ -109,7 +109,7 @@ with col2:
     total_cost = chargeable_weight * rate
     
     # 결과 요약 카드
-    st.info(f"**실제 총 중량(Actual):** {total_a_w:.2;f} kg")
+    st.info(f"**실제 총 중량(Actual):** {total_a_w:.2f} kg")
     st.info(f"**부피 총 중량(Volume):** {total_v_w:.2f} kg")
     
     st.success(f"### 적용 중량: {chargeable_weight:.2f} kg")
