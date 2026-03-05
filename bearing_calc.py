@@ -27,16 +27,14 @@ st.subheader("🔍 베어링 규격 통합 조회")
 
 @st.cache_data
 def load_data():
-    # 파일명은 업로드된 실제 파일명에 맞춰 설정
+    # 파일명은 실제 경로에 맞춰 설정 (보통 GitHub에 올린 파일명)
     file_path = "bearing_list.xlsx - Sheet1.csv"
     try:
         df = pd.read_csv(file_path)
-        # 컬럼명 정리 (공백 제거 등)
         df.columns = [col.strip() for col in df.columns]
         return df
     except:
         try:
-            # 엑셀 원본 파일명 시도
             df = pd.read_excel("bearing_list.xlsx")
             df.columns = [col.strip() for col in df.columns]
             return df
@@ -48,30 +46,36 @@ df = load_data()
 # 검색어 입력창
 raw_query = st.text_input("조회할 형번을 입력하세요 (예: 1204C3, 30311J 등)", "").strip().upper()
 
-# --- 안내 문구 최소화 적용 (폰트 크기 0.7em) ---
+# 안내 문구 (0.7em 크기)
 st.markdown("<p style='color: #999; font-size: 0.7em; margin-top: -15px; margin-left: 2px;'>※ NSK 일반 규격 시리즈를 기준으로 검색 가능하며, 추후 추가 예정입니다.</p>", unsafe_allow_html=True)
 
 if raw_query:
     if not df.empty:
-        # 정규표현식: 입력어에서 숫자 덩어리만 추출하여 유연하게 매칭
+        # 입력어에서 숫자 덩어리 추출
         match = re.search(r'\d+', raw_query)
         if match:
             core_num = match.group()
-            # '모델명(Model)' 컬럼에서 숫자 포함 여부 확인
-            res = df[df['모델명(Model)'].astype(str).str.contains(core_num, na=False)]
+            # 검색 결과 데이터 복사
+            res = df[df['모델명(Model)'].astype(str).str.contains(core_num, na=False)].copy()
             
             if not res.empty:
                 st.write(f"✅ **'{core_num}'** 관련 규격 검색 결과입니다.")
-                st.table(res)
+                
+                # [수정 포인트] 1부터 시작하는 순번(No.) 추가
+                res.insert(0, 'No.', range(1, len(res) + 1))
+                
+                # [수정 포인트] 인덱스(기존 숫자)를 숨기고 데이터프레임 출력
+                st.dataframe(res, hide_index=True, use_container_width=True)
             else:
                 st.warning(f"'{core_num}' 관련 데이터를 찾을 수 없습니다.")
         else:
-            # 숫자가 없는 검색어는 전체 텍스트 매칭
-            res = df[df['모델명(Model)'].astype(str).str.contains(raw_query, na=False)]
+            # 숫자가 없는 경우 전체 매칭
+            res = df[df['모델명(Model)'].astype(str).str.contains(raw_query, na=False)].copy()
             if not res.empty:
-                st.table(res)
+                res.insert(0, 'No.', range(1, len(res) + 1))
+                st.dataframe(res, hide_index=True, use_container_width=True)
     else:
-        st.error("데이터 파일을 로드할 수 없습니다. 파일명을 확인해 주세요.")
+        st.error("데이터 파일을 로드할 수 없습니다.")
 
 st.divider()
 
