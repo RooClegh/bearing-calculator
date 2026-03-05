@@ -7,8 +7,8 @@ st.set_page_config(page_title="베어링 항공운임 스마트 계산기", page
 
 st.markdown("""
     <div style="display: flex; align-items: baseline;">
-        <h1 style="margin-right: 15px;">✈️ Bearing Air Freight Smart Calculator</h1>
-        <span style="font-size: 0.9em; color: gray;">Ver 5.5</span>
+        <h1 style="margin-right: 15px;">✈️ 베어링 항공운임 스마트 계산기</h1>
+        <span style="font-size: 0.9em; color: gray;">Ver 5.6</span>
     </div>
 """, unsafe_allow_html=True)
 
