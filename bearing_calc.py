@@ -71,24 +71,27 @@ with col1:
         total_a_w = (content_w + box_tare) * box_qty
         total_v_w = (l * w * h / 6) * box_qty
 
-    elif mode == "팔레트(Pallet)":
-        # 2. 팔레트 4종 적용
+  elif mode == "팔레트(Pallet)":
         p_choice = st.selectbox("팔레트 규격 선택 (mm)", [
             "800 x 600", 
             "900 x 900", 
             "1050 x 950", 
             "1200 x 800"
         ])
-        # 규격 파싱
-        p_l, p_w = map(float, p_choice.split(" x "))
+        # 1. 규격 파싱 및 mm -> cm 변환
+        p_l_mm, p_w_mm = map(float, p_choice.split(" x "))
+        p_l_cm, p_w_cm = p_l_mm / 10, p_w_mm / 10
         
-        p_height = st.number_input("적재 높이(mm)", min_value=100, value=1000, step=50)
-        p_content_w = st.number_input("적재물 총 무게(kg)", min_value=0.0, value=200.0)
-        # 4. 팔레트 자체 무게 추가
-        p_tare = st.number_input("팔레트 자체 무게(kg)", min_value=0.0, value=15.0, step=1.0)
+        p_height_mm = st.number_input("적재 높이(mm)", min_value=100, value=1000, step=50)
+        p_height_cm = p_height_mm / 10
         
+        p_content_w = st.number_input("적재물 총 무게(kg)", min_value=0.0, value=10.0)
+        p_tare = st.number_input("팔레트 자체 무게(kg)", min_value=0.0, value=15.0)
+        
+        # 실제 중량: 물건 + 팔레트
         total_a_w = p_content_w + p_tare
-        total_v_w = (p_l/10 * p_w/10 * p_height/10) / 6
+        # 부피 중량: (L * W * H) / 6000 (cm 기준)
+        total_v_w = (p_l_cm * p_w_cm * p_height_cm) / 6
 
     elif mode == "수기 입력":
         st.markdown("##### ✏️ 커스텀 규격 입력")
