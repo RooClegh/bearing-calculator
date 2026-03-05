@@ -91,14 +91,31 @@ with col1:
         total_v_w = (p_l/10 * p_w/10 * p_height/10) / 6
 
     elif mode == "수기 입력":
-        # 3. 별도 사이즈 수기 입력
-        c_l = st.number_input("가로(mm)", min_value=0)
-        c_w = st.number_input("세로(mm)", min_value=0)
-        c_h = st.number_input("높이(mm)", min_value=0)
-        c_qty = st.number_input("수량(pcs)", min_value=1, value=1)
-        c_content_w = st.number_input("개당 총 무게(kg, 포장포함)", min_value=0.0, value=10.0)
+        st.markdown("##### ✏️ 커스텀 규격 입력")
         
-        total_a_w = c_content_w * c_qty
+        # 1. 수기 입력 시에도 포장재 유형 선택
+        manual_packaging = st.selectbox("추가할 포장재 무게", ["없음 (0kg)", "종이박스 (0.5kg)", "팔레트 (15kg)"])
+        
+        # 선택에 따른 기본 무게 설정
+        if "종이박스" in manual_packaging:
+            default_tare = 0.5
+        elif "팔레트" in manual_packaging:
+            default_tare = 15.0
+        else:
+            default_tare = 0.0
+            
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            c_l = st.number_input("가로(mm)", min_value=0, value=250)
+            c_w = st.number_input("세로(mm)", min_value=0, value=250)
+            c_h = st.number_input("높이(mm)", min_value=0, value=250)
+        with col_m2:
+            c_qty = st.number_input("총 수량(pcs)", min_value=1, value=1)
+            c_content_w = st.number_input("내용물 순수 무게(kg/개)", min_value=0.0, value=10.0)
+            c_tare_w = st.number_input("선택 포장재 무게(kg/개)", value=default_tare)
+
+        # 최종 계산 (실제 중량 = (내용물 + 포장재) * 수량)
+        total_a_w = (c_content_w + c_tare_w) * c_qty
         total_v_w = (c_l/10 * c_w/10 * c_h/10 / 6) * c_qty
 
 with col2:
